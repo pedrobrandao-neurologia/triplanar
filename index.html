@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Triplanar — visualizador NIfTI e conversor DICOM</title>
+    <meta name="description" content="Visualizador de neuroimagem (NIfTI, DICOM) com conversão DICOM para NIfTI, renderização 3D, sobreposições, desenho de regiões e scripts. Funciona offline; as imagens não saem do aparelho." />
+    <meta name="theme-color" content="#0f1318" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icone.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icone-192.png" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <header id="barra-menu">
+      <div class="marca" title="Triplanar">
+        <img src="icons/icone.svg" alt="" width="22" height="22" />
+        <span>Triplanar</span>
+      </div>
+      <nav id="menus" aria-label="Menu principal"></nav>
+      <div class="espaco"></div>
+      <button id="btn-instalar" class="btn pequeno" hidden>Instalar app</button>
+    </header>
+
+    <div id="barra-ferramentas" role="toolbar" aria-label="Ações rápidas">
+      <button id="btn-painel" class="btn" aria-pressed="true" title="Mostrar ou ocultar o painel lateral">☰ Painel</button>
+      <button id="btn-abrir" class="btn primario">Abrir imagem</button>
+      <button id="btn-dicom" class="btn">DICOM → NIfTI</button>
+      <span class="sep"></span>
+      <div class="grupo" role="group" aria-label="Visão">
+        <button class="btn visao" data-visao="mpr" title="Multiplanar: axial + coronal + sagital">A+C+S</button>
+        <button class="btn visao" data-visao="mpr3d" title="Multiplanar com renderização 3D">A+C+S+3D</button>
+        <button class="btn visao" data-visao="axial" title="Axial">Axial</button>
+        <button class="btn visao" data-visao="coronal" title="Coronal">Coronal</button>
+        <button class="btn visao" data-visao="sagital" title="Sagital">Sagital</button>
+        <button class="btn visao" data-visao="render" title="Renderização 3D">3D</button>
+        <button class="btn visao" data-visao="mosaico" title="Mosaico de fatias">Mosaico</button>
+      </div>
+      <span class="sep"></span>
+      <label class="campo-linha" title="O que o arrasto com o botão direito (ou dois dedos) faz">
+        <span>Arrastar:</span>
+        <select id="sel-arrasto">
+          <option value="contrast">Ajustar contraste</option>
+          <option value="measurement">Medir distância</option>
+          <option value="angle">Medir ângulo</option>
+          <option value="pan">Mover e ampliar</option>
+          <option value="slicer3D">Girar fatia 3D</option>
+        </select>
+      </label>
+    </div>
+
+    <main id="area">
+      <aside id="painel" aria-label="Painel de controles">
+        <details open class="secao" id="sec-camadas">
+          <summary>Camadas</summary>
+          <ul id="lista-camadas" class="lista-camadas"></ul>
+          <p id="sem-camadas" class="suave pequeno">Nenhuma imagem aberta.</p>
+          <div id="props-camada" hidden>
+            <label class="campo">Esquema de cores
+              <select id="cam-cores"></select>
+            </label>
+            <label class="campo" title="Mostra também os valores negativos, espelhando a faixa de exibição">Cores para valores negativos
+              <select id="cam-neg"><option value="">(não mostrar)</option></select>
+            </label>
+            <div class="duas-colunas">
+              <label class="campo">Mais escuro
+                <input id="cam-min" type="number" step="any" />
+              </label>
+              <label class="campo">Mais claro
+                <input id="cam-max" type="number" step="any" />
+              </label>
+            </div>
+            <label class="campo">Opacidade <output id="cam-opac-v"></output>
+              <input id="cam-opac" type="range" min="0" max="1" step="0.01" />
+            </label>
+            <div class="linha-opcoes">
+              <label><input id="cam-inverter" type="checkbox" /> Inverter cores</label>
+              <label><input id="cam-barra" type="checkbox" /> Na barra de cores</label>
+            </div>
+            <div id="cam-4d" hidden>
+              <label class="campo">Volume (4D) <output id="cam-quadro-v"></output>
+                <input id="cam-quadro" type="range" min="0" max="0" step="1" />
+              </label>
+              <div class="linha-botoes">
+                <button id="cam-animar" class="btn pequeno" aria-pressed="false">▶ Animar</button>
+                <button id="cam-grafico" class="btn pequeno" aria-pressed="false">Gráfico temporal</button>
+              </div>
+            </div>
+            <div class="linha-botoes">
+              <button id="cam-reset" class="btn pequeno" title="Recalcula a faixa de exibição">Redefinir contraste</button>
+              <button id="cam-cab" class="btn pequeno">Cabeçalho</button>
+              <button id="cam-hist" class="btn pequeno">Histograma</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="secao" id="sec-2d">
+          <summary>Fatias 2D</summary>
+          <div class="linha-opcoes coluna">
+            <label><input type="checkbox" data-opt="isRadiologicalConvention" /> Convenção radiológica (esquerda à direita)</label>
+            <label><input type="checkbox" data-opt="suave" /> Interpolação suave</label>
+            <label><input type="checkbox" data-opt="isColorbar" /> Barra de cores</label>
+            <label><input type="checkbox" data-opt="isRuler" /> Régua (10 cm)</label>
+            <label><input type="checkbox" data-opt="isOrientCube" /> Cubo de orientação</label>
+            <label><input type="checkbox" data-opt="isOrientationTextVisible" /> Rótulos de orientação</label>
+            <label><input type="checkbox" data-opt="isSliceMM" /> Espaço do mundo (mm)</label>
+            <label><input type="checkbox" data-opt="isAdditiveBlend" /> Mistura aditiva das sobreposições</label>
+          </div>
+          <label class="campo">Espessura da mira <output id="mira-v"></output>
+            <input id="mira" type="range" min="0" max="3" step="0.1" />
+          </label>
+          <div class="duas-colunas">
+            <label class="campo">Cor da mira
+              <input id="mira-cor" type="color" value="#ff0000" />
+            </label>
+            <label class="campo">Cor de fundo
+              <input id="fundo-cor" type="color" value="#000000" />
+            </label>
+          </div>
+          <label class="campo">Gama <output id="gama-v"></output>
+            <input id="gama" type="range" min="0.2" max="3" step="0.05" value="1" />
+          </label>
+        </details>
+
+        <details class="secao" id="sec-3d">
+          <summary>Renderização 3D</summary>
+          <label class="linha-check"><input id="clip-ligado" type="checkbox" /> Plano de corte</label>
+          <label class="campo">Profundidade <output id="clip-prof-v"></output>
+            <input id="clip-prof" type="range" min="-0.5" max="0.5" step="0.01" value="0" />
+          </label>
+          <label class="campo">Azimute do corte <output id="clip-azi-v"></output>
+            <input id="clip-azi" type="range" min="0" max="360" step="1" value="0" />
+          </label>
+          <label class="campo">Elevação do corte <output id="clip-elev-v"></output>
+            <input id="clip-elev" type="range" min="-180" max="180" step="1" value="0" />
+          </label>
+          <label class="linha-check"><input id="clip-recorte" type="checkbox" /> Recorte em cunha (mostra só o que seria cortado)</label>
+          <hr />
+          <label class="campo">Câmera: azimute <output id="cam-azi-v"></output>
+            <input id="cam-azi" type="range" min="0" max="360" step="1" value="110" />
+          </label>
+          <label class="campo">Câmera: elevação <output id="cam-elev-v"></output>
+            <input id="cam-elev" type="range" min="-90" max="90" step="1" value="10" />
+          </label>
+          <label class="campo">Iluminação (sombreamento) <output id="luz-v"></output>
+            <input id="luz" type="range" min="0" max="1" step="0.05" value="0" />
+          </label>
+          <label class="campo">Opacidade pelas bordas <output id="borda-v"></output>
+            <input id="borda" type="range" min="0" max="1" step="0.05" value="0" />
+          </label>
+          <div class="linha-botoes">
+            <button class="btn pequeno" data-camera="270,0">Esquerda</button>
+            <button class="btn pequeno" data-camera="90,0">Direita</button>
+            <button class="btn pequeno" data-camera="180,0">Anterior</button>
+            <button class="btn pequeno" data-camera="0,0">Posterior</button>
+            <button class="btn pequeno" data-camera="0,90">Superior</button>
+            <button class="btn pequeno" data-camera="0,-90">Inferior</button>
+          </div>
+        </details>
+
+        <details class="secao" id="sec-desenho">
+          <summary>Desenho (região de interesse)</summary>
+          <label class="linha-check"><input id="des-ligado" type="checkbox" /> Modo de desenho ativo</label>
+          <div id="des-cores" class="paleta" role="radiogroup" aria-label="Cor da caneta"></div>
+          <div class="duas-colunas">
+            <label class="campo">Forma
+              <select id="des-forma">
+                <option value="0">Caneta</option>
+                <option value="1">Retângulo</option>
+                <option value="2">Elipse</option>
+              </select>
+            </label>
+            <label class="campo">Espessura <output id="des-tam-v"></output>
+              <input id="des-tam" type="range" min="1" max="15" step="1" value="1" />
+            </label>
+          </div>
+          <div class="linha-opcoes coluna">
+            <label><input id="des-cheio" type="checkbox" checked /> Preencher regiões fechadas</label>
+            <label><input id="des-sobrescrever" type="checkbox" checked /> Sobrescrever cores existentes</label>
+            <label><input id="des-clique" type="checkbox" /> Clique para segmentar (região de intensidade parecida)</label>
+          </div>
+          <label class="campo">Opacidade do desenho <output id="des-opac-v"></output>
+            <input id="des-opac" type="range" min="0" max="1" step="0.05" value="0.8" />
+          </label>
+          <div class="linha-botoes">
+            <button id="des-desfazer" class="btn pequeno">Desfazer</button>
+            <button id="des-interpolar" class="btn pequeno" title="Preenche as fatias entre duas fatias desenhadas">Interpolar fatias</button>
+            <button id="des-crescer" class="btn pequeno" title="Expande as sementes desenhadas por similaridade (GrowCut)">Crescer regiões</button>
+          </div>
+          <div class="linha-botoes">
+            <label class="campo-linha">Automático:
+              <select id="des-otsu">
+                <option value="2">2 classes</option>
+                <option value="3" selected>3 classes</option>
+                <option value="4">4 classes</option>
+              </select>
+            </label>
+            <button id="des-auto" class="btn pequeno" title="Segmentação automática por limiares de Otsu">Aplicar</button>
+          </div>
+          <div class="linha-botoes">
+            <button id="des-abrir" class="btn pequeno">Abrir VOI</button>
+            <button id="des-salvar" class="btn pequeno">Salvar VOI</button>
+            <button id="des-fechar" class="btn pequeno">Fechar VOI</button>
+            <button id="des-stats" class="btn pequeno">Estatísticas</button>
+          </div>
+        </details>
+      </aside>
+
+      <section id="palco" aria-label="Imagem">
+        <canvas id="tela" tabindex="0"></canvas>
+        <div id="vazio">
+          <img src="icons/icone.svg" alt="" width="72" height="72" />
+          <h1>Triplanar</h1>
+          <p>Visualize NIfTI e DICOM e converta DICOM em NIfTI direto no navegador. As imagens não saem do seu aparelho.</p>
+          <div class="linha-botoes centro">
+            <button class="btn primario" id="vazio-abrir">Abrir imagem</button>
+            <button class="btn" id="vazio-pasta">Abrir pasta DICOM</button>
+            <button class="btn" id="vazio-dicom">Converter DICOM em NIfTI</button>
+            <button class="btn" id="vazio-exemplo">Carregar exemplo (MNI152)</button>
+          </div>
+          <p class="suave pequeno">Ou arraste arquivos (.nii, .nii.gz, .nrrd, .mgz, DICOM, .zip) ou uma pasta para cá.</p>
+        </div>
+        <div id="soltar" hidden>Solte para abrir</div>
+        <div id="ocupado" hidden><div class="rodando" aria-hidden="true"></div><span id="ocupado-texto">Carregando…</span></div>
+      </section>
+    </main>
+
+    <footer id="barra-status">
+      <span id="st-pos">—</span>
+      <span id="st-valor"></span>
+      <span class="espaco"></span>
+      <span id="st-info" class="suave"></span>
+    </footer>
+
+    <!-- seletores de arquivo -->
+    <input id="inp-abrir" type="file" multiple hidden />
+    <input id="inp-sobrepor" type="file" multiple hidden />
+    <input id="inp-pasta" type="file" webkitdirectory multiple hidden />
+    <input id="inp-voi" type="file" hidden />
+    <input id="inp-dcm-pasta" type="file" webkitdirectory multiple hidden />
+    <input id="inp-dcm-arquivos" type="file" multiple hidden />
+    <input id="inp-script" type="file" accept=".py,.js,.txt" hidden />
+
+    <!-- conversor DICOM → NIfTI -->
+    <dialog id="dlg-dicom" class="dlg largo">
+      <header class="dlg-topo">
+        <h2>Converter DICOM em NIfTI</h2>
+        <button id="dcm-fechar" class="btn-x" aria-label="Fechar">×</button>
+      </header>
+      <div class="dlg-corpo">
+        <div id="dcm-soltar" class="zona-soltar">
+          <p><strong>1.</strong> Escolha os arquivos DICOM. Arraste uma pasta para cá ou use os botões.</p>
+          <div class="linha-botoes centro">
+            <button id="dcm-pasta" class="btn primario">Selecionar pasta…</button>
+            <button id="dcm-arquivos" class="btn">Selecionar arquivos ou .zip…</button>
+          </div>
+          <p id="dcm-resumo" class="suave pequeno">Nenhum arquivo escolhido. A conversão é feita no seu aparelho, sem envio.</p>
+        </div>
+        <div id="dcm-series"></div>
+
+        <h3><strong>2.</strong> Opções</h3>
+        <div class="grade-form">
+          <label class="span2">Nome do arquivo de saída
+            <input id="dcm-nome" type="text" spellcheck="false" autocomplete="off" />
+          </label>
+          <details class="span2 ajuda">
+            <summary>Valores especiais para o nome</summary>
+            <p class="pequeno">%a = antena (bobina) · %b = nome-base · %c = comentários · %d = descrição · %e = número do eco · %f = nome da pasta · %i = ID do paciente · %j = SeriesInstanceUID · %k = StudyInstanceUID · %m = fabricante · %n = nome do paciente · %p = protocolo · %r = número da instância · %s = número da série · %t = hora · %u = número da aquisição · %v = fornecedor · %x = ID do estudo · %z = nome da sequência. Exemplo: <code>%s_%p</code> gera <code>4_T1mprage</code>.</p>
+            <p class="pequeno">Atenção: %f, %n e %i podem levar o nome ou o identificador do paciente para o nome do arquivo.</p>
+          </details>
+          <label>Formato de saída
+            <select id="dcm-formato">
+              <option value="niigz">NIfTI compactado (.nii.gz)</option>
+              <option value="nii">NIfTI (.nii)</option>
+              <option value="nrrd">NRRD (.nrrd)</option>
+            </select>
+          </label>
+          <label>Sidecar BIDS (.json)
+            <select id="dcm-bids">
+              <option value="anon">Sim, anonimizado</option>
+              <option value="completo">Sim, com dados do paciente</option>
+              <option value="nao">Não criar</option>
+            </select>
+          </label>
+          <label>Mesclar fatias 2D da mesma série
+            <select id="dcm-mesclar">
+              <option value="2">Automático</option>
+              <option value="y">Sim (ignora eco, exposição etc.)</option>
+              <option value="n">Não</option>
+            </select>
+          </label>
+          <div class="linha-opcoes coluna">
+            <label><input id="dcm-ignorar" type="checkbox" /> Ignorar imagens derivadas, localizadoras e 2D</label>
+            <label><input id="dcm-recortar" type="checkbox" /> Recortar imagens 3D (remove o excesso de pescoço)</label>
+            <label><input id="dcm-philips" type="checkbox" /> Escala precisa da Philips (ponto flutuante)</label>
+            <label><input id="dcm-escala" type="checkbox" /> Escalar inteiros de 16 bits sem perda</label>
+            <label><input id="dcm-detalhado" type="checkbox" /> Registro detalhado</label>
+          </div>
+        </div>
+
+        <div class="linha-botoes">
+          <button id="dcm-converter" class="btn primario" disabled><strong>3.</strong>&nbsp;Converter</button>
+          <button id="dcm-cancelar" class="btn" hidden>Cancelar</button>
+          <progress id="dcm-progresso" max="1" hidden></progress>
+        </div>
+
+        <div id="dcm-resultados"></div>
+        <div id="dcm-acoes-resultado" class="linha-botoes" hidden>
+          <button id="dcm-zipar" class="btn">Baixar tudo (.zip)</button>
+          <button id="dcm-salvar-pasta" class="btn">Salvar em uma pasta…</button>
+        </div>
+        <details class="ajuda">
+          <summary>Registro do dcm2niix</summary>
+          <pre id="dcm-log" class="registro" tabindex="0"></pre>
+        </details>
+      </div>
+    </dialog>
+
+    <!-- console de scripts -->
+    <dialog id="dlg-script" class="dlg largo">
+      <header class="dlg-topo">
+        <h2>Scripts</h2>
+        <button class="btn-x" aria-label="Fechar" data-fechar>×</button>
+      </header>
+      <div class="dlg-corpo">
+        <div class="linha-botoes">
+          <label class="campo-linha">Exemplos:
+            <select id="scr-exemplos"><option value="">Escolher…</option></select>
+          </label>
+          <button id="scr-abrir" class="btn pequeno">Abrir arquivo…</button>
+          <button id="scr-salvar" class="btn pequeno">Salvar</button>
+          <button id="scr-ajuda" class="btn pequeno">Funções disponíveis</button>
+        </div>
+        <textarea id="scr-codigo" spellcheck="false" aria-label="Código do script" rows="14"></textarea>
+        <div class="linha-botoes">
+          <button id="scr-rodar" class="btn primario">▶ Executar</button>
+          <button id="scr-parar" class="btn" hidden>Parar</button>
+          <span class="suave pequeno">Aceita JavaScript e os scripts simples do MRIcroGL (import gl + chamadas gl.*).</span>
+        </div>
+        <pre id="scr-saida" class="registro" aria-live="polite"></pre>
+      </div>
+    </dialog>
+
+    <noscript>O Triplanar precisa de JavaScript e WebGL2.</noscript>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

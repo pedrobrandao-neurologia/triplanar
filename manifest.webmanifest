@@ -1,0 +1,36 @@
+{
+  "name": "Triplanar — visualizador NIfTI e conversor DICOM",
+  "short_name": "Triplanar",
+  "description": "Visualize NIfTI e DICOM, converta DICOM em NIfTI, renderize em 3D e desenhe regiões de interesse. Funciona offline; as imagens não saem do aparelho.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#0b0e12",
+  "theme_color": "#0f1318",
+  "categories": ["medical", "education", "utilities"],
+  "icons": [
+    { "src": "icons/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icone-mascara-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Converter DICOM em NIfTI", "short_name": "DICOM → NIfTI", "url": "./?acao=dicom", "icons": [{ "src": "icons/icone-192.png", "sizes": "192x192" }] }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/x-nifti": [".nii"],
+        "application/gzip": [".gz"],
+        "application/dicom": [".dcm"],
+        "application/octet-stream": [".nrrd", ".mgz", ".mgh"]
+      }
+    }
+  ]
+}
